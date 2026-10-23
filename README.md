@@ -45,6 +45,51 @@ curl -i -X POST http://localhost:8000/payload \
 curl http://localhost:8000/payload/<payload id>
 ```
 
+## The command-line client
+
+`cache-cli` sends one request body to the service, a POST and then a GET of the payload, and repeats that round `--repeat` times. With the service up from `docker compose up`:
+
+```bash
+uv run cache-cli -r 3 -j '{"list_1": ["first string", "second string", "third string"], "list_2": ["other string", "another string", "last string"]}'
+```
+
+Each round writes one JSON line to stdout, with `created` true when the POST answered `201` and false when it answered `200`:
+
+```text
+{"id": "<payload id>", "created": true, "output": "FIRST STRING, OTHER STRING, SECOND STRING, ANOTHER STRING, THIRD STRING, LAST STRING"}
+{"id": "<payload id>", "created": false, "output": "FIRST STRING, OTHER STRING, SECOND STRING, ANOTHER STRING, THIRD STRING, LAST STRING"}
+{"id": "<payload id>", "created": false, "output": "FIRST STRING, OTHER STRING, SECOND STRING, ANOTHER STRING, THIRD STRING, LAST STRING"}
+```
+
+Each round's time goes to stderr, where the caches show. The first round sends the six texts to the transformer, which Compose holds for 0.5 s per call; the others get the stored payload back:
+
+```text
+Round 1 of 3: 0.613 s
+Round 2 of 3: 0.010 s
+Round 3 of 3: 0.010 s
+```
+
+The flags:
+
+- `--host URL`: the service, `http://localhost:8000` by default.
+- `--repeat N`, `-r N`: how many rounds, 1 by default.
+- `--json JSON`, `-j JSON`: the request body, required.
+- `-h`, `--help`: the help.
+
+Only the flags set these: an exported `HOST`, or any other environment variable, changes nothing.
+
+The CLI checks only that the body is a JSON object and leaves its content to the service, so it can send a body the service rejects, to show the answer. It quotes the service's message:
+
+```bash
+uv run cache-cli -j '{"list_1": ["a", "b"], "list_2": ["c"]}'
+```
+
+```text
+Round 1 of 1 failed: POST http://localhost:8000/payload answered 422 Unprocessable Content: list_1 and list_2 must have the same length.
+```
+
+The exit status is 0 when every round succeeds, 1 when the service fails, and 2 for an invalid argument, with the reason on stderr. The service fails when it can't be reached or answers with an error status. The CLI then stops at that round and doesn't retry, since it is there to show how the service behaves.
+
 ## The transformation cache
 
 The transformer, a stand-in for an external service, uppercases a text. What it returns is stored in the `transformation` table, so a text repeated in a request is sent to it once, and a stored text is never sent again, even after a restart or from another instance on the same database. Two requests that arrive together with the same new text both send it, since neither finds it stored yet; the result stored first is kept, and [Concurrent transformer calls](#concurrent-transformer-calls) says what would save the second call. Texts match exactly, with no trimming, case folding or Unicode normalization.

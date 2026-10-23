@@ -1,14 +1,16 @@
 import uuid
 from collections import Counter
-from collections.abc import Collection, Mapping
+from collections.abc import Callable, Collection, Mapping
 from typing import ClassVar
 
 import anyio
+import httpx2
 from sqlalchemy import QueuePool
 
 from payload_cache.application.ports.payload_gateway import NewPayload, PayloadGateway, StoredPayload
 from payload_cache.application.ports.transformation_cache import TransformationCache
 from payload_cache.application.ports.transformer import Transformer, TransformerUnavailableError
+from payload_cache.cli.client import PayloadClient
 
 
 class StubCrashError(Exception):
@@ -140,3 +142,25 @@ class FakeRacingPayloadGateway(FakePayloadGateway):
 
     async def find_id(self, fingerprint: str) -> uuid.UUID | None:
         return None
+
+
+class FakePayloadApi:
+    """Answers like the service's HTTP API: 201 for a body it hasn't seen, 200 with the same id after that."""
+
+    def __init__(self) -> None:
+        self.requests: list[httpx2.Request] = []
+        self._ids: dict[bytes, str] = {}
+
+    def __call__(self, request: httpx2.Request) -> httpx2.Response:
+        self.requests.append(request)
+        if request.method == "GET":
+            return httpx2.Response(200, json={"output": "A, B"})
+        if (payload_id := self._ids.get(request.content)) is not None:
+            return httpx2.Response(200, json={"id": payload_id, "message": "Payload already exists."})
+        payload_id = self._ids[request.content] = f"payload-{len(self._ids) + 1}"
+        return httpx2.Response(201, json={"id": payload_id, "message": "Payload created."})
+
+
+def payload_client_for(handler: Callable[[httpx2.Request], httpx2.Response]) -> PayloadClient:
+    """A PayloadClient whose requests the handler answers, at http://service.test."""
+    return PayloadClient(httpx2.Client(transport=httpx2.MockTransport(handler), base_url="http://service.test"))
