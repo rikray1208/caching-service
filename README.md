@@ -69,14 +69,23 @@ Round 2 of 3: 0.010 s
 Round 3 of 3: 0.010 s
 ```
 
+The body can also come from a file, or from stdin with `-i -`, and the JSON lines can go to a file instead of stdout. With the task's sample in `sample.json`, the first command writes two lines to `out.jsonl`, and the second prints one to stdout; the times go to stderr either way:
+
+```bash
+uv run cache-cli -i sample.json -o out.jsonl -r 2
+uv run cache-cli -i - < sample.json
+```
+
 The flags:
 
-- `--host URL`: the service, `http://localhost:8000` by default.
+- `--host URL`, `-h URL`: the service, `http://localhost:8000` by default.
 - `--repeat N`, `-r N`: how many rounds, 1 by default.
-- `--json JSON`, `-j JSON`: the request body, required.
-- `-h`, `--help`: the help.
+- `--input FILE`, `-i FILE`: a file that holds the request body, as UTF-8; `-i -` reads it from stdin.
+- `--json JSON`, `-j JSON`: the request body itself.
+- `--output FILE`, `-o FILE`: the file for the JSON lines, in a directory that must exist. An existing file is replaced, but only once the body is read, so invalid input leaves it as it was. `-o -`, the default, writes them to stdout.
+- `--help`: the help.
 
-Only the flags set these: an exported `HOST`, or any other environment variable, changes nothing.
+Exactly one of `--input` and `--json` gives the body. `-h` sets the host, as the task's list of arguments has it, so the help is `--help` alone. A flag can't be abbreviated: `--rep 3` is an unknown flag, not `--repeat 3`. Only the flags set these: an exported `HOST`, or any other environment variable, changes nothing.
 
 The CLI checks only that the body is a JSON object and leaves its content to the service, so it can send a body the service rejects, to show the answer. It quotes the service's message:
 
@@ -88,7 +97,7 @@ uv run cache-cli -j '{"list_1": ["a", "b"], "list_2": ["c"]}'
 Round 1 of 1 failed: POST http://localhost:8000/payload answered 422 Unprocessable Content: list_1 and list_2 must have the same length.
 ```
 
-The exit status is 0 when every round succeeds, 1 when the service fails, and 2 for an invalid argument, with the reason on stderr. The service fails when it can't be reached or answers with an error status. The CLI then stops at that round and doesn't retry, since it is there to show how the service behaves.
+The exit status is 0 when every round succeeds, 1 when the service fails, and 2 for an invalid argument, a body that can't be read or isn't a JSON object, or an output file that can't be opened, with the reason on stderr. The service fails when it can't be reached or answers with an error status. The CLI then stops at that round and doesn't retry, since it is there to show how the service behaves.
 
 ## The transformation cache
 
