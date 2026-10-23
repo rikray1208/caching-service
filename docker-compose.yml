@@ -14,6 +14,8 @@ services:
       context: .
     environment:
       <<: *postgres-environment
+      # Holds each call of the stand-in transformer as a network call would, so the cache shows in timings.
+      TRANSFORMER_DELAY: "0.5"
     ports:
       - "8000:8000"
     depends_on:

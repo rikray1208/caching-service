@@ -1,6 +1,6 @@
 # payload-cache
 
-A FastAPI service that generates payloads from two lists of texts.
+A FastAPI service that generates payloads from two lists of texts. It stores what the transformer returns for each text in PostgreSQL, so a stored text never reaches the transformer again, across requests and restarts.
 
 You need Docker, and [uv](https://docs.astral.sh/uv/) for the commands that run on the host (uv installs Python 3.14 itself).
 
@@ -38,6 +38,22 @@ curl -X POST http://localhost:8000/payload \
   -d '{"list_1": ["first string", "second string", "third string"], "list_2": ["other string", "another string", "last string"]}'
 curl http://localhost:8000/payload/<payload id>
 ```
+
+## The transformation cache
+
+The transformer, a stand-in for an external service, uppercases a text. What it returns is stored in the `transformation` table, so a text repeated in a request is sent to it once, and a stored text is never sent again, even after a restart or from another instance on the same database. Two requests that arrive together with the same new text both send it, since neither finds it stored yet; the result stored first is kept. Texts match exactly, with no trimming, case folding or Unicode normalization.
+
+`TRANSFORMER_DELAY` holds each call of the stand-in for that many seconds, as a network call would, so the cache shows in timings. It is 0 by default, and Compose sets it to 0.5: the sample takes about 3 s the first time, and the same texts again, for example with `list_1` and `list_2` swapped, answer almost at once.
+
+Each request logs one INFO line that says where its texts came from; follow it with `docker compose logs -f api`. The sample, then the sample with its lists swapped, then `{"list_1": ["x", "x"], "list_2": ["x", "y"]}` log:
+
+```text
+api-1  | 2026-10-23 16:05:43,061 INFO payload_cache.application.services.transformation: 6 texts, 6 distinct: 0 from cache, 6 transformed
+api-1  | 2026-10-23 16:05:43,102 INFO payload_cache.application.services.transformation: 6 texts, 6 distinct: 6 from cache, 0 transformed
+api-1  | 2026-10-23 16:05:44,140 INFO payload_cache.application.services.transformation: 4 texts, 2 distinct: 0 from cache, 2 transformed
+```
+
+`distinct` counts a repeated text once, and `from cache` plus `transformed` always add up to it.
 
 ## What the API accepts
 

@@ -1,4 +1,5 @@
 import logging
+from collections import Counter
 from uuid import uuid4
 
 import pytest
@@ -6,7 +7,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from payload_cache.inbound.http.dependencies import get_transformer
-from tests.doubles import StubCrashError, StubCrashingTransformer
+from payload_cache.run import create_app
+from payload_cache.settings import Settings
+from tests.doubles import SpyPoolTransformer, SpyTransformer, StubCrashError, StubCrashingTransformer
 
 SAMPLE_INPUT = {
     "list_1": ["first string", "second string", "third string"],
@@ -117,3 +120,55 @@ def test_unexpected_error_answers_a_generic_500_and_logs_the_traceback(
     [logged_error] = [record for record in caplog.records if record.levelno == logging.ERROR]
     assert logged_error.exc_info is not None
     assert logged_error.exc_info[0] is StubCrashError
+
+
+@pytest.fixture
+def spy_transformer(app: FastAPI) -> SpyTransformer:
+    spy = SpyTransformer()
+    app.dependency_overrides[get_transformer] = lambda: spy
+    return spy
+
+
+def test_a_text_repeated_in_a_request_reaches_the_transformer_once(
+    client: TestClient, spy_transformer: SpyTransformer
+) -> None:
+    created = client.post("/payload", json={"list_1": ["x", "x"], "list_2": ["x", "y"]})
+
+    assert spy_transformer.calls == Counter(["x", "y"])
+    assert client.get(f"/payload/{created.json()['id']}").json() == {"output": "X, X, X, Y"}
+
+
+def test_overlapping_inputs_reach_the_transformer_only_for_their_new_texts(
+    client: TestClient, spy_transformer: SpyTransformer
+) -> None:
+    client.post("/payload", json={"list_1": ["a", "b"], "list_2": ["c", "d"]})
+    created = client.post("/payload", json={"list_1": ["c", "e"], "list_2": ["a", "f"]})
+
+    assert spy_transformer.calls == Counter(["a", "b", "c", "d", "e", "f"])
+    assert client.get(f"/payload/{created.json()['id']}").json() == {"output": "C, A, E, F"}
+
+
+def test_a_second_app_on_the_same_database_reuses_the_cache(client: TestClient, app_settings: Settings) -> None:
+    client.post("/payload", json=SAMPLE_INPUT)
+    second_app = create_app(app_settings)
+    second_spy = SpyTransformer()
+    second_app.dependency_overrides[get_transformer] = lambda: second_spy
+    # The same texts as a different input, so that only the transformation cache can answer them.
+    swapped_input = {"list_1": SAMPLE_INPUT["list_2"], "list_2": SAMPLE_INPUT["list_1"]}
+
+    with TestClient(second_app) as second_client:
+        created = second_client.post("/payload", json=swapped_input)
+
+    assert second_spy.calls == Counter()
+    assert client.get(f"/payload/{created.json()['id']}").json() == {
+        "output": "OTHER STRING, FIRST STRING, ANOTHER STRING, SECOND STRING, LAST STRING, THIRD STRING"
+    }
+
+
+def test_no_database_connection_is_held_while_the_transformer_runs(app: FastAPI, client: TestClient) -> None:
+    transformer = SpyPoolTransformer(app.state["session_factory"].kw["bind"].pool)
+    app.dependency_overrides[get_transformer] = lambda: transformer
+
+    client.post("/payload", json=SAMPLE_INPUT)
+
+    assert transformer.checked_out_connections == [0] * 6

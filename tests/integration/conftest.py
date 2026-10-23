@@ -107,8 +107,13 @@ def it_sessionmaker(it_engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
 
 
 @pytest.fixture
-def app(it_worker_database_settings: DatabaseSettings, it_db_clean: None) -> FastAPI:
-    return create_app(Settings(database=it_worker_database_settings))
+def app_settings(it_worker_database_settings: DatabaseSettings) -> Settings:
+    return Settings(database=it_worker_database_settings)
+
+
+@pytest.fixture
+def app(app_settings: Settings, it_db_clean: None) -> FastAPI:
+    return create_app(app_settings)
 
 
 @pytest.fixture

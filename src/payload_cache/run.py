@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI, settings: Settings) -> AsyncIterator[None]:
     """Creates no tables: the container runs `alembic upgrade head` first, and the test fixtures migrate their own."""
     async with open_async_engine(settings.database) as engine:
         app.state["session_factory"] = create_async_session_factory(engine)
-        app.state["transformer"] = UppercaseTransformer()
+        app.state["transformer"] = UppercaseTransformer(delay=settings.transformer_delay)
         yield
 
 

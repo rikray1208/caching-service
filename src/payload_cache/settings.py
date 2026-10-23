@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, NonNegativeFloat
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
@@ -33,4 +33,5 @@ class DatabaseSettings(BaseSettings):
 
 class Settings(BaseSettings):
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    transformer_delay: NonNegativeFloat = Field(0, allow_inf_nan=False)  # seconds per call of the stand-in
     logging_level: LogLevel = "INFO"
