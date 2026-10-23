@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 
 from payload_cache.application.payload_input import PayloadInput
 from payload_cache.inbound.http.dependencies import PayloadServiceDependency
@@ -17,7 +17,4 @@ async def create_payload(body: CreatePayloadRequest, service: PayloadServiceDepe
 
 @router.get("/payload/{payload_id}")
 async def get_payload(payload_id: UUID, service: PayloadServiceDependency) -> PayloadResponse:
-    output = await service.get_output(payload_id)
-    if output is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND)
-    return PayloadResponse(output=output)
+    return PayloadResponse(output=await service.get_output(payload_id))

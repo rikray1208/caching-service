@@ -5,6 +5,7 @@ from functools import partial
 
 from fastapi import FastAPI
 
+from payload_cache.inbound.http.exception_handlers import setup_exception_handlers
 from payload_cache.inbound.http.routes import router
 from payload_cache.outbound.persistence.engine import create_async_session_factory, open_async_engine
 from payload_cache.outbound.uppercase_transformer import UppercaseTransformer
@@ -38,5 +39,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     setup_logging(settings.logging_level)
 
     app = FastAPI(title="Payload cache", version="0.1.0", lifespan=partial(lifespan, settings=settings))
+    setup_exception_handlers(app)
     app.include_router(router)
     return app

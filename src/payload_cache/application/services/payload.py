@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from payload_cache.application.payload_input import PayloadInput
-from payload_cache.application.ports.payload_gateway import NewPayload, PayloadGateway
+from payload_cache.application.ports.payload_gateway import NewPayload, PayloadGateway, PayloadNotFoundError
 from payload_cache.application.ports.transformer import Transformer
 
 
@@ -18,5 +18,8 @@ class PayloadService:
         output = payload_input.render(transformations)
         return await self._payload_gateway.add(NewPayload(output=output))
 
-    async def get_output(self, payload_id: UUID) -> str | None:
-        return await self._payload_gateway.find_output(payload_id)
+    async def get_output(self, payload_id: UUID) -> str:
+        output = await self._payload_gateway.find_output(payload_id)
+        if output is None:
+            raise PayloadNotFoundError(payload_id)
+        return output

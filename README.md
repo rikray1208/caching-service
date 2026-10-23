@@ -39,6 +39,16 @@ curl -X POST http://localhost:8000/payload \
 curl http://localhost:8000/payload/<payload id>
 ```
 
+## What the API accepts
+
+`list_1` and `list_2` hold 1 to 1,000 texts each, and the same number of texts. A text is up to 1,000 characters long and may be empty. It must not contain `\u0000`, which PostgreSQL text can't store, or a lone surrogate such as `\ud800`, which isn't valid UTF-8. The limits are easier to relax later than to tighten.
+
+Errors answer:
+
+- `422` for a body that breaks these rules. Lists of different lengths answer the service's error body, `{"code": "unequal_lists", "message": …, "details": …}`; the other rules answer FastAPI's `{"detail": [...]}`. A body that isn't valid UTF-8 gets FastAPI's `400` instead.
+- `404` with code `payload_not_found` for an id no payload has, and `422` for a malformed id.
+- `500` with code `internal_server_error` for anything unexpected; the service logs its traceback.
+
 ## Tests
 
 The unit tests run on the host:
