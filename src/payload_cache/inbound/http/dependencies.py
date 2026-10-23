@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from payload_cache.application.ports.transformer import Transformer
 from payload_cache.application.services.payload import PayloadService
+from payload_cache.application.services.transformation import TransformationService
 from payload_cache.outbound.persistence.sqla_payload_gateway import SqlaPayloadGateway
 
 
@@ -27,7 +28,7 @@ TransformerDependency = Annotated[Transformer, Depends(get_transformer)]
 def get_payload_service(
     session_factory: SessionFactoryDependency, transformer: TransformerDependency
 ) -> PayloadService:
-    return PayloadService(transformer, SqlaPayloadGateway(session_factory))
+    return PayloadService(TransformationService(transformer), SqlaPayloadGateway(session_factory))
 
 
 PayloadServiceDependency = Annotated[PayloadService, Depends(get_payload_service)]
