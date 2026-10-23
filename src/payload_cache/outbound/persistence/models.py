@@ -21,6 +21,7 @@ class Payload(Base):
     __tablename__ = "payload"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, server_default=func.uuidv7())
+    fingerprint: Mapped[str] = mapped_column(String(64), unique=True)
     output: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

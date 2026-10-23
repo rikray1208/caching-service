@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import Engine, text
 
 from payload_cache.inbound.http.dependencies import get_transformer
 from payload_cache.run import create_app
@@ -172,3 +173,47 @@ def test_no_database_connection_is_held_while_the_transformer_runs(app: FastAPI,
     client.post("/payload", json=SAMPLE_INPUT)
 
     assert transformer.checked_out_connections == [0] * 6
+
+
+def test_an_input_seen_before_answers_200_with_its_id_and_no_transformer_call(
+    client: TestClient, spy_transformer: SpyTransformer, it_worker_db_engine: Engine
+) -> None:
+    created = client.post("/payload", json=SAMPLE_INPUT)
+    # Without the stored transformations, only the stored payload can spare the transformer.
+    with it_worker_db_engine.begin() as connection:
+        connection.execute(text("TRUNCATE transformation"))
+    spy_transformer.calls.clear()
+
+    repeated = client.post("/payload", json=SAMPLE_INPUT)
+
+    assert created.status_code == 201
+    assert repeated.status_code == 200
+    assert repeated.json() == {"id": created.json()["id"], "message": "Payload already exists."}
+    assert spy_transformer.calls == Counter()
+
+
+def test_both_answers_locate_the_payload(client: TestClient) -> None:
+    created = client.post("/payload", json=SAMPLE_INPUT)
+    repeated = client.post("/payload", json=SAMPLE_INPUT)
+
+    payload_path = f"/payload/{created.json()['id']}"
+    assert created.headers["Location"] == payload_path
+    assert repeated.headers["Location"] == payload_path
+    assert client.get(repeated.headers["Location"]).json() == {"output": SAMPLE_OUTPUT}
+
+
+def test_location_keeps_the_root_path_of_a_proxy(app: FastAPI) -> None:
+    with TestClient(app, root_path="/api") as client:
+        created = client.post("/payload", json=SAMPLE_INPUT)
+
+    assert created.headers["Location"] == f"/api/payload/{created.json()['id']}"
+
+
+def test_inputs_with_the_same_output_get_different_ids(client: TestClient) -> None:
+    lower = client.post("/payload", json={"list_1": ["a"], "list_2": ["b"]})
+    upper = client.post("/payload", json={"list_1": ["A"], "list_2": ["B"]})
+
+    assert upper.status_code == 201
+    assert upper.json()["id"] != lower.json()["id"]
+    assert client.get(lower.headers["Location"]).json() == {"output": "A, B"}
+    assert client.get(upper.headers["Location"]).json() == {"output": "A, B"}

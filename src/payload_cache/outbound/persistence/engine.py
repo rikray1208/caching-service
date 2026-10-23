@@ -11,6 +11,9 @@ async def open_async_engine(settings: DatabaseSettings) -> AsyncIterator[AsyncEn
     engine = create_async_engine(
         settings.create_url(),
         pool_pre_ping=True,
+        # PostgreSQL's default, set here because SqlaPayloadGateway.add relies on it,
+        # and a server, database or role may set another default.
+        isolation_level="READ COMMITTED",
     )
     try:
         yield engine

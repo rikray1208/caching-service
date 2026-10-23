@@ -5,7 +5,7 @@ from typing import ClassVar
 
 from sqlalchemy import QueuePool
 
-from payload_cache.application.ports.payload_gateway import NewPayload, PayloadGateway
+from payload_cache.application.ports.payload_gateway import NewPayload, PayloadGateway, StoredPayload
 from payload_cache.application.ports.transformation_cache import TransformationCache
 from payload_cache.application.ports.transformer import Transformer
 
@@ -58,12 +58,26 @@ class FakeTransformationCache(TransformationCache):
 
 class FakePayloadGateway(PayloadGateway):
     def __init__(self) -> None:
+        self.ids: dict[str, uuid.UUID] = {}
         self.outputs: dict[uuid.UUID, str] = {}
 
-    async def add(self, new_payload: NewPayload) -> uuid.UUID:
+    async def find_id(self, fingerprint: str) -> uuid.UUID | None:
+        return self.ids.get(fingerprint)
+
+    async def add(self, new_payload: NewPayload) -> StoredPayload:
+        if (payload_id := self.ids.get(new_payload.fingerprint)) is not None:
+            return StoredPayload(id=payload_id, created=False)
         payload_id = uuid.uuid7()
+        self.ids[new_payload.fingerprint] = payload_id
         self.outputs[payload_id] = new_payload.output
-        return payload_id
+        return StoredPayload(id=payload_id, created=True)
 
     async def find_output(self, payload_id: uuid.UUID) -> str | None:
         return self.outputs.get(payload_id)
+
+
+class FakeRacingPayloadGateway(FakePayloadGateway):
+    """Its lookup misses every input, as if a concurrent request stored the input just after the lookup."""
+
+    async def find_id(self, fingerprint: str) -> uuid.UUID | None:
+        return None

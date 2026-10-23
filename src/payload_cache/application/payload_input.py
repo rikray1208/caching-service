@@ -1,3 +1,5 @@
+import hashlib
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from itertools import chain
@@ -23,6 +25,15 @@ class PayloadInput:
 
     def texts(self) -> list[str]:
         return [*self.list_1, *self.list_2]
+
+    def fingerprint(self) -> str:
+        """
+        SHA-256 of [list_1, list_2] as compact JSON, ASCII-escaped so that encoding never fails.
+        The order and the boundary between the lists count. Stored with every payload:
+        changing the scheme silently stops existing ids from being reused.
+        """
+        canonical_json = json.dumps([self.list_1, self.list_2], ensure_ascii=True, separators=(",", ":"))
+        return hashlib.sha256(canonical_json.encode("ascii")).hexdigest()
 
     def render(self, transformations: Mapping[str, str]) -> str:
         """
