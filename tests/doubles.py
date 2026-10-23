@@ -3,6 +3,7 @@ from collections import Counter
 from collections.abc import Collection, Mapping
 from typing import ClassVar
 
+import anyio
 from sqlalchemy import QueuePool
 
 from payload_cache.application.ports.payload_gateway import NewPayload, PayloadGateway, StoredPayload
@@ -32,8 +33,49 @@ class SpyTransformer(Transformer):
         return text.upper()
 
 
+class SpyHoldingTransformer(SpyTransformer):
+    """Holds every call until `expected_calls` calls have started, so it returns only if the calls run concurrently."""
+
+    def __init__(self, expected_calls: int) -> None:
+        super().__init__()
+        self._expected_calls = expected_calls
+        self._all_started = anyio.Event()
+
+    async def transform(self, text: str) -> str:
+        transformed = await super().transform(text)
+        if self.calls.total() == self._expected_calls:
+            self._all_started.set()
+        await self._all_started.wait()
+        return transformed
+
+
+class StubCrashingHoldingTransformer(SpyHoldingTransformer):
+    """
+    Once `expected_calls` calls have started, the call for `crash_text` crashes, and the others stay held
+    until they are cancelled, which `cancelled` counts.
+    """
+
+    def __init__(self, crash_text: str, expected_calls: int) -> None:
+        super().__init__(expected_calls)
+        self._crash_text = crash_text
+        self.cancelled: Counter[str] = Counter()
+
+    async def transform(self, text: str) -> str:
+        try:
+            await super().transform(text)
+            if text != self._crash_text:
+                await anyio.sleep_forever()
+        except anyio.get_cancelled_exc_class():
+            self.cancelled[text] += 1
+            raise
+        raise StubCrashError(StubCrashingTransformer.CRASH_TEXT)
+
+
 class StubFailingTransformer(SpyTransformer):
-    """Fails for the chosen texts as a retry may fix, and otherwise uppercases; counts every call, failed or not."""
+    """
+    Fails for the chosen texts as a retry may fix, and otherwise uppercases; counts every call, failed or not.
+    Each call yields once before it answers, so that a failure lands while the other calls are still running.
+    """
 
     FAILURE_TEXT: ClassVar[str] = "stub failure details that must stay in the log"
 
@@ -43,6 +85,7 @@ class StubFailingTransformer(SpyTransformer):
 
     async def transform(self, text: str) -> str:
         transformed = await super().transform(text)
+        await anyio.lowlevel.checkpoint()
         if text in self._failing_texts:
             raise TransformerUnavailableError(self.FAILURE_TEXT)
         return transformed

@@ -1,14 +1,17 @@
 import logging
 from collections import Counter
 
+import anyio
 import pytest
 
 from payload_cache.application.ports.transformer import TransformerUnavailableError
 from payload_cache.application.services.transformation import TransformationService
 from tests.doubles import (
     FakeTransformationCache,
+    SpyHoldingTransformer,
     SpyTransformer,
     StubCrashError,
+    StubCrashingHoldingTransformer,
     StubCrashingTransformer,
     StubFailingTransformer,
 )
@@ -45,6 +48,17 @@ async def test_overlapping_calls_reach_the_transformer_only_for_their_new_texts(
     assert transformations == {"b": "B", "c": "C"}
     assert spy.calls == Counter(["a", "b", "c"])
     assert cache.transformations == {"a": "A", "b": "B", "c": "C"}
+
+
+async def test_the_missing_texts_are_transformed_concurrently() -> None:
+    spy = SpyHoldingTransformer(expected_calls=3)
+    service = TransformationService(spy, FakeTransformationCache({"d": "cached d"}))
+
+    with anyio.fail_after(1):
+        transformations = await service.transform_all(["a", "b", "c", "d"])
+
+    assert transformations == {"a": "A", "b": "B", "c": "C", "d": "cached d"}
+    assert spy.calls == Counter(["a", "b", "c"])
 
 
 async def test_one_info_line_says_where_the_transformations_came_from(caplog: pytest.LogCaptureFixture) -> None:
@@ -110,5 +124,15 @@ async def test_the_raised_error_has_the_port_s_message_whatever_the_adapter_s_sa
 async def test_any_other_exception_is_a_bug_and_not_taken_for_a_failure() -> None:
     service = TransformationService(StubCrashingTransformer(), FakeTransformationCache())
 
-    with pytest.raises(StubCrashError):
+    with pytest.RaisesGroup(StubCrashError):
         await service.transform_all(["a"])
+
+
+async def test_any_other_exception_cancels_the_calls_still_running() -> None:
+    stub = StubCrashingHoldingTransformer("b", expected_calls=3)
+    service = TransformationService(stub, FakeTransformationCache())
+
+    with pytest.RaisesGroup(StubCrashError), anyio.fail_after(1):
+        await service.transform_all(["a", "b", "c"])
+
+    assert stub.cancelled == Counter(["a", "c"])

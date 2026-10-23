@@ -47,9 +47,9 @@ curl http://localhost:8000/payload/<payload id>
 
 ## The transformation cache
 
-The transformer, a stand-in for an external service, uppercases a text. What it returns is stored in the `transformation` table, so a text repeated in a request is sent to it once, and a stored text is never sent again, even after a restart or from another instance on the same database. Two requests that arrive together with the same new text both send it, since neither finds it stored yet; the result stored first is kept. Texts match exactly, with no trimming, case folding or Unicode normalization.
+The transformer, a stand-in for an external service, uppercases a text. What it returns is stored in the `transformation` table, so a text repeated in a request is sent to it once, and a stored text is never sent again, even after a restart or from another instance on the same database. Two requests that arrive together with the same new text both send it, since neither finds it stored yet; the result stored first is kept, and [Concurrent transformer calls](#concurrent-transformer-calls) says what would save the second call. Texts match exactly, with no trimming, case folding or Unicode normalization.
 
-`TRANSFORMER_DELAY` holds each call of the stand-in for that many seconds, as a network call would, so the cache shows in timings. It is 0 by default, and Compose sets it to 0.5: the sample takes about 3 s the first time, and the same texts again, for example with `list_1` and `list_2` swapped, answer almost at once.
+`TRANSFORMER_DELAY` holds each call of the stand-in for that many seconds, as a network call would, so the cache shows in timings. It is 0 by default, and Compose sets it to 0.5: the sample takes about 0.5 s the first time, since its six texts go to the transformer at once, and the same texts again, for example with `list_1` and `list_2` swapped, answer almost at once.
 
 Each request that generates a payload logs one INFO line that says where its texts came from; follow it with `docker compose logs -f api`. An input submitted before logs none, since it transforms nothing. The sample, then the sample with its lists swapped, then `{"list_1": ["x", "x"], "list_2": ["x", "y"]}` log:
 
@@ -77,9 +77,19 @@ A real transformer is an external service, and some of its failures pass on thei
 {"code": "transformer_unavailable", "message": "The transformer is unavailable. Try again later.", "details": null}
 ```
 
-A retry of the same request finds those transformations stored and sends the transformer only the texts that failed. The INFO line counts the failed texts, and a WARNING line with the first failure's traceback follows it. Any other exception from the transformer is a bug, and answers `500`. The uppercase stand-in never fails, so the tests show this with a stub that fails for chosen texts.
+A retry of the same request finds those transformations stored and sends the transformer only the texts that failed. The INFO line counts the failed texts, and a WARNING line with the first failure's traceback follows it. Any other exception from the transformer is a bug: it cancels the calls still running and answers `500`. The uppercase stand-in never fails, so the tests show this with a stub that fails for chosen texts.
 
 The service never retries on its own. The `503` tells the client that a retry may help, and the client decides when to try again. A real transformer adapter would retry transient failures itself, with backoff, for example with tenacity: it knows which failures of its service are transient and how hard that service may be pushed. That keeps one retry layer. Retries in the service on top of the adapter's would multiply the calls to a service that is already failing, and hold the request open meanwhile.
+
+## Concurrent transformer calls
+
+A request sends all its missing texts to the transformer at once, from an AnyIO task group, so it waits about as long as its slowest call. With Compose's `TRANSFORMER_DELAY` of 0.5 s, a POST of 6 texts never sent before took 3.1 s when the calls ran one after another, and 0.5 to 0.6 s with the calls at once (two requests each, timed with `curl`).
+
+A plain task group fails on the first exception, as TypeScript's `Promise.all` rejects on the first rejection, and it also cancels the calls still running, so their results are lost. So each call records a `TransformerUnavailableError` instead of raising it, which makes the group behave like `Promise.allSettled`: a failed call cancels no other, and every success is stored before the `503`. Any other exception is a bug: it cancels the calls still running, and the `500` is logged with an `ExceptionGroup` of the calls that crashed.
+
+The service doesn't limit how many calls run at once, up to 2,000 for the largest request, on the assumption that the transformer sets no concurrency limit. If it had one, its adapter would enforce it, for example with an AnyIO `CapacityLimiter`, as it would handle retries.
+
+Concurrency within a request doesn't help across requests: two requests that arrive together with the same new text both send it. An in-process single-flight would save that call: a `TransformationService` that lives as long as the app and maps each text in flight to an AnyIO event, which a second request waits on instead of calling the transformer. Across instances it would need a claim row in the database. It isn't built, since it saves calls only when requests with the same new text overlap.
 
 ## What the API accepts
 

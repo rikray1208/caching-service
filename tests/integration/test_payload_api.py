@@ -126,7 +126,9 @@ def test_unexpected_error_answers_a_generic_500_and_logs_the_traceback(
     assert StubCrashingTransformer.CRASH_TEXT not in response.text
     [logged_error] = [record for record in caplog.records if record.levelno == logging.ERROR]
     assert logged_error.exc_info is not None
-    assert logged_error.exc_info[0] is StubCrashError
+    logged_group = logged_error.exc_info[1]
+    assert isinstance(logged_group, ExceptionGroup)
+    assert {type(error) for error in logged_group.exceptions} == {StubCrashError}
 
 
 def test_a_transformer_failure_answers_503_and_stores_no_payload(

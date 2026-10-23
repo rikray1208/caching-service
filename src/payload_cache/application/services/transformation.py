@@ -1,6 +1,8 @@
 import logging
 from collections.abc import Collection
 
+import anyio
+
 from payload_cache.application.ports.transformation_cache import TransformationCache
 from payload_cache.application.ports.transformer import Transformer, TransformerUnavailableError
 
@@ -18,6 +20,7 @@ class TransformationService:
         """
         Raise TransformerUnavailableError if any call failed, after saving the calls that succeeded,
         so a retry calls the transformer only for the texts that failed.
+        Any other exception from the transformer is a bug: it cancels the other calls, and arrives in an ExceptionGroup.
         """
         distinct_texts = list(dict.fromkeys(texts))
         cached = await self._cache.find(distinct_texts)
@@ -25,8 +28,9 @@ class TransformationService:
 
         transformed: dict[str, str] = {}
         failures: list[TransformerUnavailableError] = []
-        for text in missing:
-            await self._transform_one(text, transformed, failures)
+        async with anyio.create_task_group() as group:
+            for text in missing:
+                group.start_soon(self._transform_one, text, transformed, failures)
 
         await self._cache.save(transformed)
         logger.info(
@@ -46,7 +50,7 @@ class TransformationService:
     async def _transform_one(
         self, text: str, transformed: dict[str, str], failures: list[TransformerUnavailableError]
     ) -> None:
-        # Any other exception is a bug: it ends the request at once, and nothing is saved.
+        # Only this error is caught, so that a failure stops no other call; anything else is a bug.
         try:
             transformed[text] = await self._transformer.transform(text)
         except TransformerUnavailableError as error:
