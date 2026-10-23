@@ -1,0 +1,13 @@
+from payload_cache.application.payload_input import PayloadInput
+
+
+def test_sample_renders_as_the_task_shows() -> None:
+    payload_input = PayloadInput(
+        list_1=("first string", "second string", "third string"),
+        list_2=("other string", "another string", "last string"),
+    )
+    transformations = {text: text.upper() for text in payload_input.texts()}
+
+    output = payload_input.render(transformations)
+
+    assert output == "FIRST STRING, OTHER STRING, SECOND STRING, ANOTHER STRING, THIRD STRING, LAST STRING"

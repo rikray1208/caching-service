@@ -1,0 +1,9 @@
+services:
+  api:
+    build:
+      args:
+        INSTALL_DEV_DEPENDENCIES: "true"
+    ports: !reset []
+
+  db:
+    ports: !reset []

@@ -1,0 +1,46 @@
+name: payload-cache
+
+# Dev-only credentials, so a fresh clone runs without a .env. One block, so PostgreSQL, the API and the tests agree.
+x-postgres-environment: &postgres-environment
+  POSTGRES_HOST: db
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: payload_cache
+  POSTGRES_PASSWORD: payload_cache
+  POSTGRES_DB: payload_cache
+
+services:
+  api:
+    build:
+      context: .
+    environment:
+      <<: *postgres-environment
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:18-alpine
+    shm_size: 128mb
+    environment:
+      <<: *postgres-environment
+    # Not 5432, which another local PostgreSQL may hold. Published only for Alembic's autogenerate from the host.
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    command:
+      - postgres
+      - -c
+      - log_statement=mod
+    healthcheck:
+      # Over TCP: on a fresh volume, the image's init server listens on the Unix socket alone, then restarts.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 2s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  postgres_data:
