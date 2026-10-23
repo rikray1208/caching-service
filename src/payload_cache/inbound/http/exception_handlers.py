@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 from payload_cache.application.payload_input import UnequalListsError
 from payload_cache.application.ports.payload_gateway import PayloadNotFoundError
+from payload_cache.application.ports.transformer import TransformerUnavailableError
 from payload_cache.exceptions import BaseError
 from payload_cache.inbound.http.schemas import ErrorResponse
 
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 _HTTP_STATUS_BY_ERROR: Final[Mapping[type[BaseError], int]] = {
     PayloadNotFoundError: status.HTTP_404_NOT_FOUND,
     UnequalListsError: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    TransformerUnavailableError: status.HTTP_503_SERVICE_UNAVAILABLE,
 }
 
 _INTERNAL_SERVER_ERROR: Final = ErrorResponse(code="internal_server_error", message="Internal server error.")

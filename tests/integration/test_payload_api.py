@@ -10,7 +10,13 @@ from sqlalchemy import Engine, text
 from payload_cache.inbound.http.dependencies import get_transformer
 from payload_cache.run import create_app
 from payload_cache.settings import Settings
-from tests.doubles import SpyPoolTransformer, SpyTransformer, StubCrashError, StubCrashingTransformer
+from tests.doubles import (
+    SpyPoolTransformer,
+    SpyTransformer,
+    StubCrashError,
+    StubCrashingTransformer,
+    StubFailingTransformer,
+)
 
 SAMPLE_INPUT = {
     "list_1": ["first string", "second string", "third string"],
@@ -121,6 +127,37 @@ def test_unexpected_error_answers_a_generic_500_and_logs_the_traceback(
     [logged_error] = [record for record in caplog.records if record.levelno == logging.ERROR]
     assert logged_error.exc_info is not None
     assert logged_error.exc_info[0] is StubCrashError
+
+
+def test_a_transformer_failure_answers_503_and_stores_no_payload(
+    app: FastAPI, client: TestClient, it_worker_db_engine: Engine
+) -> None:
+    app.dependency_overrides[get_transformer] = lambda: StubFailingTransformer("second string", "last string")
+
+    response = client.post("/payload", json=SAMPLE_INPUT)
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "code": "transformer_unavailable",
+        "message": "The transformer is unavailable. Try again later.",
+        "details": None,
+    }
+    with it_worker_db_engine.connect() as connection:
+        assert connection.execute(text("SELECT count(*) FROM payload")).scalar_one() == 0
+
+
+def test_a_retry_after_a_transformer_failure_calls_only_the_failed_texts(app: FastAPI, client: TestClient) -> None:
+    app.dependency_overrides[get_transformer] = lambda: StubFailingTransformer("second string", "last string")
+    failed = client.post("/payload", json=SAMPLE_INPUT)
+    spy = SpyTransformer()
+    app.dependency_overrides[get_transformer] = lambda: spy
+
+    retried = client.post("/payload", json=SAMPLE_INPUT)
+
+    assert failed.status_code == 503
+    assert retried.status_code == 201
+    assert spy.calls == Counter(["second string", "last string"])
+    assert client.get(retried.headers["Location"]).json() == {"output": SAMPLE_OUTPUT}
 
 
 @pytest.fixture

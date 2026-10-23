@@ -3,8 +3,15 @@ from collections import Counter
 
 import pytest
 
+from payload_cache.application.ports.transformer import TransformerUnavailableError
 from payload_cache.application.services.transformation import TransformationService
-from tests.doubles import FakeTransformationCache, SpyTransformer
+from tests.doubles import (
+    FakeTransformationCache,
+    SpyTransformer,
+    StubCrashError,
+    StubCrashingTransformer,
+    StubFailingTransformer,
+)
 
 
 async def test_a_repeated_text_reaches_the_transformer_once() -> None:
@@ -46,4 +53,62 @@ async def test_one_info_line_says_where_the_transformations_came_from(caplog: py
 
     await service.transform_all(["a", "b", "b", "c"])
 
-    assert caplog.messages == ["4 texts, 3 distinct: 1 from cache, 2 transformed"]
+    assert caplog.messages == ["4 texts, 3 distinct: 1 from cache, 2 transformed, 0 failed"]
+
+
+async def test_a_failed_call_stops_no_other_call_and_the_successes_are_saved() -> None:
+    stub = StubFailingTransformer("b")
+    cache = FakeTransformationCache({"d": "cached d"})
+    service = TransformationService(stub, cache)
+
+    with pytest.raises(TransformerUnavailableError):
+        await service.transform_all(["a", "b", "c", "d"])
+
+    assert stub.calls == Counter(["a", "b", "c"])
+    assert cache.transformations == {"a": "A", "c": "C", "d": "cached d"}
+
+
+async def test_a_retry_after_a_partial_failure_calls_only_the_failed_texts() -> None:
+    cache = FakeTransformationCache()
+    failing_service = TransformationService(StubFailingTransformer("b", "d"), cache)
+    with pytest.raises(TransformerUnavailableError):
+        await failing_service.transform_all(["a", "b", "c", "d"])
+    spy = SpyTransformer()
+
+    transformations = await TransformationService(spy, cache).transform_all(["a", "b", "c", "d"])
+
+    assert spy.calls == Counter(["b", "d"])
+    assert transformations == {"a": "A", "b": "B", "c": "C", "d": "D"}
+
+
+async def test_failed_calls_are_counted_and_logged_as_a_warning(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO)
+    service = TransformationService(StubFailingTransformer("b", "c"), FakeTransformationCache({"a": "A"}))
+
+    with pytest.raises(TransformerUnavailableError):
+        await service.transform_all(["a", "b", "c", "d"])
+
+    assert [(record.levelno, record.getMessage()) for record in caplog.records] == [
+        (logging.INFO, "4 texts, 4 distinct: 1 from cache, 1 transformed, 2 failed"),
+        (logging.WARNING, "2 of 3 transformer calls failed"),
+    ]
+    warning_exc_info = caplog.records[1].exc_info
+    assert warning_exc_info is not None
+    assert str(warning_exc_info[1]) == StubFailingTransformer.FAILURE_TEXT
+
+
+async def test_the_raised_error_has_the_port_s_message_whatever_the_adapter_s_says() -> None:
+    service = TransformationService(StubFailingTransformer("a"), FakeTransformationCache())
+
+    with pytest.raises(TransformerUnavailableError) as raised:
+        await service.transform_all(["a"])
+
+    assert str(raised.value) == "The transformer is unavailable. Try again later."
+    assert str(raised.value.__cause__) == StubFailingTransformer.FAILURE_TEXT
+
+
+async def test_any_other_exception_is_a_bug_and_not_taken_for_a_failure() -> None:
+    service = TransformationService(StubCrashingTransformer(), FakeTransformationCache())
+
+    with pytest.raises(StubCrashError):
+        await service.transform_all(["a"])

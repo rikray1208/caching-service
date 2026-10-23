@@ -7,7 +7,7 @@ from sqlalchemy import QueuePool
 
 from payload_cache.application.ports.payload_gateway import NewPayload, PayloadGateway, StoredPayload
 from payload_cache.application.ports.transformation_cache import TransformationCache
-from payload_cache.application.ports.transformer import Transformer
+from payload_cache.application.ports.transformer import Transformer, TransformerUnavailableError
 
 
 class StubCrashError(Exception):
@@ -30,6 +30,22 @@ class SpyTransformer(Transformer):
     async def transform(self, text: str) -> str:
         self.calls[text] += 1
         return text.upper()
+
+
+class StubFailingTransformer(SpyTransformer):
+    """Fails for the chosen texts as a retry may fix, and otherwise uppercases; counts every call, failed or not."""
+
+    FAILURE_TEXT: ClassVar[str] = "stub failure details that must stay in the log"
+
+    def __init__(self, *failing_texts: str) -> None:
+        super().__init__()
+        self._failing_texts = frozenset(failing_texts)
+
+    async def transform(self, text: str) -> str:
+        transformed = await super().transform(text)
+        if text in self._failing_texts:
+            raise TransformerUnavailableError(self.FAILURE_TEXT)
+        return transformed
 
 
 class SpyPoolTransformer(Transformer):

@@ -1,10 +1,19 @@
 from collections import Counter
 
+import pytest
+
 from payload_cache.application.payload_input import PayloadInput
 from payload_cache.application.ports.payload_gateway import StoredPayload
+from payload_cache.application.ports.transformer import TransformerUnavailableError
 from payload_cache.application.services.payload import PayloadService
 from payload_cache.application.services.transformation import TransformationService
-from tests.doubles import FakePayloadGateway, FakeRacingPayloadGateway, FakeTransformationCache, SpyTransformer
+from tests.doubles import (
+    FakePayloadGateway,
+    FakeRacingPayloadGateway,
+    FakeTransformationCache,
+    SpyTransformer,
+    StubFailingTransformer,
+)
 
 
 async def test_texts_of_an_earlier_payload_do_not_reach_the_transformer_again() -> None:
@@ -53,3 +62,13 @@ async def test_a_different_input_with_the_same_output_gets_a_new_payload() -> No
     assert upper.created is True
     assert upper.id != lower.id
     assert await service.get_output(upper.id) == await service.get_output(lower.id) == "A, B"
+
+
+async def test_a_transformer_failure_stores_no_payload() -> None:
+    gateway = FakePayloadGateway()
+    service = PayloadService(TransformationService(StubFailingTransformer("b"), FakeTransformationCache()), gateway)
+
+    with pytest.raises(TransformerUnavailableError):
+        await service.create(PayloadInput(list_1=("a",), list_2=("b",)))
+
+    assert gateway.outputs == {}

@@ -54,12 +54,12 @@ The transformer, a stand-in for an external service, uppercases a text. What it 
 Each request that generates a payload logs one INFO line that says where its texts came from; follow it with `docker compose logs -f api`. An input submitted before logs none, since it transforms nothing. The sample, then the sample with its lists swapped, then `{"list_1": ["x", "x"], "list_2": ["x", "y"]}` log:
 
 ```text
-api-1  | 2026-10-23 16:05:43,061 INFO payload_cache.application.services.transformation: 6 texts, 6 distinct: 0 from cache, 6 transformed
-api-1  | 2026-10-23 16:05:43,102 INFO payload_cache.application.services.transformation: 6 texts, 6 distinct: 6 from cache, 0 transformed
-api-1  | 2026-10-23 16:05:44,140 INFO payload_cache.application.services.transformation: 4 texts, 2 distinct: 0 from cache, 2 transformed
+api-1  | 2026-10-23 16:56:45,957 INFO payload_cache.application.services.transformation: 6 texts, 6 distinct: 0 from cache, 6 transformed, 0 failed
+api-1  | 2026-10-23 16:56:45,990 INFO payload_cache.application.services.transformation: 6 texts, 6 distinct: 6 from cache, 0 transformed, 0 failed
+api-1  | 2026-10-23 16:56:47,036 INFO payload_cache.application.services.transformation: 4 texts, 2 distinct: 0 from cache, 2 transformed, 0 failed
 ```
 
-`distinct` counts a repeated text once, and `from cache` plus `transformed` always add up to it.
+`distinct` counts a repeated text once, and `from cache`, `transformed` and `failed` always add up to it. With the stand-in, `failed` stays 0: see [When the transformer fails](#when-the-transformer-fails).
 
 ## Payload id reuse
 
@@ -69,6 +69,18 @@ An input is identified by its fingerprint, the SHA-256 of `[list_1, list_2]` as 
 
 Two requests that arrive together with the same new input may both generate it, but they get one id: the unique index lets one of them store the payload, and the other answers `200` with that payload's id.
 
+## When the transformer fails
+
+A real transformer is an external service, and some of its failures pass on their own, such as a timeout or a restart. Its adapter raises `TransformerUnavailableError` for those. The request then still sends every other missing text, stores the transformations that succeeded, and answers `503` without storing a payload:
+
+```json
+{"code": "transformer_unavailable", "message": "The transformer is unavailable. Try again later.", "details": null}
+```
+
+A retry of the same request finds those transformations stored and sends the transformer only the texts that failed. The INFO line counts the failed texts, and a WARNING line with the first failure's traceback follows it. Any other exception from the transformer is a bug, and answers `500`. The uppercase stand-in never fails, so the tests show this with a stub that fails for chosen texts.
+
+The service never retries on its own. The `503` tells the client that a retry may help, and the client decides when to try again. A real transformer adapter would retry transient failures itself, with backoff, for example with tenacity: it knows which failures of its service are transient and how hard that service may be pushed. That keeps one retry layer. Retries in the service on top of the adapter's would multiply the calls to a service that is already failing, and hold the request open meanwhile.
+
 ## What the API accepts
 
 `list_1` and `list_2` hold 1 to 1,000 texts each, and the same number of texts. A text is up to 1,000 characters long and may be empty. It must not contain `\u0000`, which PostgreSQL text can't store, or a lone surrogate such as `\ud800`, which isn't valid UTF-8. The limits are easier to relax later than to tighten.
@@ -77,6 +89,7 @@ Errors answer:
 
 - `422` for a body that breaks these rules. Lists of different lengths answer the service's error body, `{"code": "unequal_lists", "message": …, "details": …}`; the other rules answer FastAPI's `{"detail": [...]}`. A body that isn't valid UTF-8 gets FastAPI's `400` instead.
 - `404` with code `payload_not_found` for an id no payload has, and `422` for a malformed id.
+- `503` with code `transformer_unavailable` when the transformer failed for some texts; a retry may succeed.
 - `500` with code `internal_server_error` for anything unexpected; the service logs its traceback.
 
 ## Tests
