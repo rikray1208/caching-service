@@ -10,10 +10,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, NullPool, create_engine, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from payload_cache.outbound.persistence.engine import create_async_session_factory, open_async_engine
-from payload_cache.outbound.persistence.models import Base
-from payload_cache.run import create_app
-from payload_cache.settings import DatabaseSettings, Settings
+from app.common.outbound.persistence.engine import create_async_session_factory, open_async_engine
+from app.common.outbound.persistence.settings import DatabaseSettings
+from app.core.run import create_app
+from app.core.settings import Settings
+from app.payload.outbound.persistence.models import Base
 
 TEST_INFRA_FLAG: Final[str] = "IT_TEST_INFRA"
 

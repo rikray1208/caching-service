@@ -1,7 +1,7 @@
 import httpx2
 import pytest
 
-from payload_cache.cli.client import CreatedPayload, ServiceError
+from app.cli.client import CreatedPayload, ServiceError
 from tests.doubles import payload_client_for
 
 BODY = {"list_1": ["a"], "list_2": ["b"]}

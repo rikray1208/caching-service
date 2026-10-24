@@ -6,8 +6,8 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from payload_cache.outbound.persistence.models import Base
-from payload_cache.settings import DatabaseSettings
+from app.common.outbound.persistence.settings import DatabaseSettings
+from app.payload.outbound.persistence.models import Base
 
 config = context.config
 

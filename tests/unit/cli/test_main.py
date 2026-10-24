@@ -10,7 +10,7 @@ from pathlib import Path
 import httpx2
 import pytest
 
-from payload_cache.cli.main import (
+from app.cli.main import (
     EXIT_INVALID_ARGUMENTS,
     EXIT_OK,
     EXIT_SERVICE_FAILED,
@@ -18,7 +18,7 @@ from payload_cache.cli.main import (
     read_request_body,
     run,
 )
-from payload_cache.cli.settings import parse_settings
+from app.cli.settings import parse_settings
 from tests.doubles import FakePayloadApi, payload_client_for
 
 BODY = {"list_1": ["a"], "list_2": ["b"]}

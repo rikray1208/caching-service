@@ -4,8 +4,8 @@ from io import StringIO
 import pytest
 from fastapi.testclient import TestClient
 
-from payload_cache.cli.client import PayloadClient
-from payload_cache.cli.main import EXIT_OK, EXIT_SERVICE_FAILED, run
+from app.cli.client import PayloadClient
+from app.cli.main import EXIT_OK, EXIT_SERVICE_FAILED, run
 
 SAMPLE_INPUT = {
     "list_1": ["first string", "second string", "third string"],

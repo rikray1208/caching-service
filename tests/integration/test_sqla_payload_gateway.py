@@ -6,9 +6,9 @@ import pytest
 from sqlalchemy import insert, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from payload_cache.application.ports.payload_gateway import NewPayload, StoredPayload
-from payload_cache.outbound.persistence.models import Payload
-from payload_cache.outbound.persistence.sqla_payload_gateway import SqlaPayloadGateway
+from app.payload.application.ports.payload_gateway import NewPayload, StoredPayload
+from app.payload.outbound.persistence.models import Payload
+from app.payload.outbound.persistence.sqla_payload_gateway import SqlaPayloadGateway
 
 FINGERPRINT: Final = "f" * 64
 OTHER_FINGERPRINT: Final = "e" * 64

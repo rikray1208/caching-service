@@ -3,7 +3,7 @@ import pytest
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from payload_cache.outbound.persistence.sqla_transformation_cache import SqlaTransformationCache
+from app.payload.outbound.persistence.sqla_transformation_cache import SqlaTransformationCache
 
 
 @pytest.fixture

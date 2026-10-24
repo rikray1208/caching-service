@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import HttpUrl, ValidationError
 
-from payload_cache.cli.settings import CliSettings, parse_request_body, parse_settings
+from app.cli.settings import CliSettings, parse_request_body, parse_settings
 
 BODY = '{"list_1": ["a"], "list_2": ["b"]}'
 

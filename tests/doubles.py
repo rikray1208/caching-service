@@ -7,10 +7,10 @@ import anyio
 import httpx2
 from sqlalchemy import QueuePool
 
-from payload_cache.application.ports.payload_gateway import NewPayload, PayloadGateway, StoredPayload
-from payload_cache.application.ports.transformation_cache import TransformationCache
-from payload_cache.application.ports.transformer import Transformer, TransformerUnavailableError
-from payload_cache.cli.client import PayloadClient
+from app.cli.client import PayloadClient
+from app.payload.application.ports.payload_gateway import NewPayload, PayloadGateway, StoredPayload
+from app.payload.application.ports.transformation_cache import TransformationCache
+from app.payload.application.ports.transformer import Transformer, TransformerUnavailableError
 
 
 class StubCrashError(Exception):

@@ -7,9 +7,9 @@ import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
-from payload_cache.health.router import PROBE_TIMEOUT_SECONDS
-from payload_cache.run import create_app
-from payload_cache.settings import Settings
+from app.core.run import create_app
+from app.core.settings import Settings
+from app.health.router import PROBE_TIMEOUT_SECONDS
 
 # The apps on an unavailable database are built in fixtures, not in the test bodies,
 # so that create_app's logging setup runs before caplog adds its handler.

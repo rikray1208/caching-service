@@ -19,11 +19,14 @@ dependencies = [
 ]
 
 [project.scripts]
-cache-cli = "payload_cache.cli.main:main"
+cache-cli = "app.cli.main:main"
 
 [build-system]
 requires = ["uv_build>=0.12.8,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "app"
 
 [dependency-groups]
 dev = [

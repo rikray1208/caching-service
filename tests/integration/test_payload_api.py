@@ -7,9 +7,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, text
 
-from payload_cache.inbound.http.dependencies import get_transformer
-from payload_cache.run import create_app
-from payload_cache.settings import Settings
+from app.core.run import create_app
+from app.core.settings import Settings
+from app.payload.inbound.http.dependencies import get_transformer
 from tests.doubles import (
     SpyPoolTransformer,
     SpyTransformer,
