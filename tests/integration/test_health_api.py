@@ -11,14 +11,9 @@ from app.core.run import create_app
 from app.core.settings import Settings
 from app.health.router import PROBE_TIMEOUT_SECONDS
 
-# The apps on an unavailable database are built in fixtures, not in the test bodies,
-# so that create_app's logging setup runs before caplog adds its handler.
-
 
 @pytest.fixture
 def refusing_database_client(app_settings: Settings) -> Iterator[TestClient]:
-    # Freed again at once, so that it refuses connections. A port kept bound without listening would refuse
-    # on Linux, but macOS drops the connection attempt instead.
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         closed_port = sock.getsockname()[1]
@@ -30,7 +25,6 @@ def refusing_database_client(app_settings: Settings) -> Iterator[TestClient]:
 @pytest.fixture
 def silent_database_client(app_settings: Settings) -> Iterator[TestClient]:
     with socket.socket() as sock:
-        # The kernel completes the TCP handshake, but nothing accepts, so the database never answers.
         sock.bind(("127.0.0.1", 0))
         sock.listen()
         with _client_on_local_port(app_settings, sock.getsockname()[1]) as client:
