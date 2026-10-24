@@ -7,6 +7,7 @@ services:
       # The demo's delay would hold every call of the stand-in in the API tests.
       TRANSFORMER_DELAY: "0"
     ports: !reset []
+    healthcheck: !reset {}
 
   db:
     ports: !reset []

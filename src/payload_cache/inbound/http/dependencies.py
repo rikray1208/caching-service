@@ -1,13 +1,21 @@
 from typing import Annotated
 
 from fastapi import Depends, Request
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from payload_cache.application.ports.transformer import Transformer
 from payload_cache.application.services.payload import PayloadService
 from payload_cache.application.services.transformation import TransformationService
 from payload_cache.outbound.persistence.sqla_payload_gateway import SqlaPayloadGateway
 from payload_cache.outbound.persistence.sqla_transformation_cache import SqlaTransformationCache
+
+
+def get_engine(request: Request) -> AsyncEngine:
+    engine: AsyncEngine = request.app.state["engine"]
+    return engine
+
+
+EngineDependency = Annotated[AsyncEngine, Depends(get_engine)]
 
 
 def get_session_factory(request: Request) -> async_sessionmaker[AsyncSession]:

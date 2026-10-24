@@ -12,7 +12,9 @@ docker compose up --build
 
 Compose starts PostgreSQL 18 and, once its healthcheck passes, the API on <http://localhost:8000>. The API applies the database migrations before it starts. The database credentials in `docker-compose.yml` are for local development only, which is why a fresh clone runs without a `.env`.
 
-The command stays in the foreground with the logs, so run the commands below in a second terminal. Or start it in the background with `docker compose up --build -d`, follow the API's logs with `docker compose logs -f api`, and give the API a few seconds to migrate before the first request.
+The command stays in the foreground with the logs, so run the commands below in a second terminal. Or start it in the background with `docker compose up --build -d --wait`, which returns once the API answers, and follow the API's logs with `docker compose logs -f api`.
+
+`GET /health` answers `200` with `{"status": "healthy"}` when the database answers a `SELECT 1`, and `503` with `{"status": "unhealthy", "database": "unavailable"}` when it doesn't within a second. The API's healthcheck in Compose calls it, so `--wait` waits for the migrations too, and `docker compose ps` shows the API unhealthy while its database is down. The transformer isn't probed: the stand-in can't fail, and a real one's outage already answers `503` per request.
 
 `docker compose down` removes both containers and keeps the stored data in the `postgres_data` volume for the next `up`. `docker compose down -v` also deletes it, and the next `up` creates the tables again from the migrations.
 
@@ -221,7 +223,7 @@ Nothing is deployed, so a revision may add a NOT NULL column without a backfill,
 
 ## Decisions
 
-The code is laid out as ports and adapters. `application` holds the rules, in `PayloadInput`, `TransformationService` and `PayloadService`, and the ports they call. `outbound` holds the adapters behind those ports: the stand-in transformer and the SQLAlchemy cache and payload gateway. `inbound/http` holds the routes, the request limits, the table that maps errors to statuses, and the dependencies that build the services and their adapters for each request; `run.py` builds the app with its engine and transformer. So every rule is tested on fakes, and only the adapters, the API and the CLI's test against it need PostgreSQL. `cli` imports none of it: it is a client of the HTTP API like any other.
+The code is laid out as ports and adapters. `application` holds the rules, in `PayloadInput`, `TransformationService` and `PayloadService`, and the ports they call. `outbound` holds the adapters behind those ports: the stand-in transformer and the SQLAlchemy cache and payload gateway. `inbound/http` holds the routes, the request limits, the table that maps errors to statuses, and the dependencies that build the services and their adapters for each request; `run.py` builds the app with its engine and transformer. So every rule is tested on fakes, and only the adapters, the API and the CLI's test against it need PostgreSQL. `cli` imports none of it: it is a client of the HTTP API like any other. `health` holds `GET /health`, which runs its `SELECT 1` on the engine directly: it checks this process's own connection to its database, which no use case needs, so there is no port for it.
 
 **POST generates the payload before it answers.** It reuses the id of an input seen before, or takes each transformation from the cache or the transformer, renders the output and stores it. GET is one read by primary key. So both endpoints keep the contract the task's sample shows, and the id that POST returns always belongs to a generated payload. The price is that a POST with new texts waits for the transformer. Two other designs would win under other conditions. Both would reuse the services and adapters, since mainly the moment the texts are transformed moves:
 
@@ -266,5 +268,4 @@ Where the task leaves a question open, the service follows the assumption below.
 - **No limit on concurrent transformer calls**: a request with 2,000 new texts makes 2,000 calls at once.
 - **No cap on the request body's size.** The limits are checked once the whole body is parsed, and a `422` echoes the input it rejects.
 - **The CLI waits 5 s per network operation**, httpx2's default. A POST that takes longer reports `got no answer: timed out` and exits 1, though the service may still store the payload.
-- **The API has no healthcheck**, so `docker compose up -d` returns while it still migrates: a request in the next second or two is refused.
 - **The database logs every write statement** (`log_statement=mod`), so the clients' texts and outputs end up in its log too.
