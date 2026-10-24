@@ -12,7 +12,9 @@ docker compose up --build
 
 Compose starts PostgreSQL 18 and, once its healthcheck passes, the API on <http://localhost:8000>. The API applies the database migrations before it starts. The database credentials in `docker-compose.yml` are for local development only, which is why a fresh clone runs without a `.env`.
 
-`docker compose down` stops both; `docker compose down -v` also deletes the stored data.
+`docker compose down` removes both containers and keeps the stored data in the `postgres_data` volume for the next `up`. `docker compose down -v` also deletes it, and the next `up` creates the tables again from the migrations.
+
+The image runs the API, the CLI and the tests as an unprivileged user, `app` with id 10001, who can read the code but not change it.
 
 ## Try the sample
 
@@ -75,6 +77,15 @@ The body can also come from a file, or from stdin with `-i -`, and the JSON line
 uv run cache-cli -i sample.json -o out.jsonl -r 2
 uv run cache-cli -i - < sample.json
 ```
+
+The API's image has `cache-cli` too, so it also runs without uv on the host. Inside the container, the service is at `localhost:8000`, the default `--host`:
+
+```bash
+docker compose exec api cache-cli -r 2 -j '{"list_1": ["first string", "second string", "third string"], "list_2": ["other string", "another string", "last string"]}'
+docker compose exec -T api cache-cli -i - < sample.json > out.jsonl
+```
+
+There, `-i FILE` and `-o FILE` name files inside the container, where the CLI runs as the image's unprivileged user and can't write to its working directory. So the second command reads the body from the host's stdin and writes the JSON lines to a file on the host through a redirect. Its `-T` gives the CLI plain stdin and stdout rather than a terminal, which would change line endings and mix stderr into the file.
 
 The flags:
 

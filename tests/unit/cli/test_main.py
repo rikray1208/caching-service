@@ -1,5 +1,6 @@
 import codecs
 import json
+import os
 import re
 import socket
 import sys
@@ -155,6 +156,22 @@ def test_main_exits_2_when_stdin_holds_no_json_object(
 
     assert exc_info.value.code == EXIT_INVALID_ARGUMENTS
     assert capsys.readouterr() == ("", "cache-cli: error: --input: must be a JSON object\n")
+
+
+@pytest.mark.skipif(sys.platform == "win32" or os.geteuid() == 0, reason="the file mode doesn't stop root or Windows")
+def test_main_exits_2_when_the_input_file_cannot_be_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    body_file = tmp_path / "body.json"
+    body_file.write_text("{}")
+    body_file.chmod(0)
+    monkeypatch.setattr(sys, "argv", ["cache-cli", "-i", str(body_file)])
+
+    with pytest.raises(SystemExit) as exc_info:
+        main()
+
+    assert exc_info.value.code == EXIT_INVALID_ARGUMENTS
+    assert capsys.readouterr() == ("", f"cache-cli: error: --input: [Errno 13] Permission denied: {str(body_file)!r}\n")
 
 
 @pytest.fixture
