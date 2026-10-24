@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Request, Response, status
 
-from app.payload.application.payload_input import PayloadInput
+from app.payload.application.value_objects.payload_input import PayloadInput
 from app.payload.inbound.http.dependencies import PayloadServiceDependency
 from app.payload.inbound.http.schemas import CreatePayloadRequest, CreatePayloadResponse, PayloadResponse
 

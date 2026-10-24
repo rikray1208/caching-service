@@ -2,11 +2,11 @@ from collections import Counter
 
 import pytest
 
-from app.payload.application.payload_input import PayloadInput
 from app.payload.application.ports.payload_gateway import StoredPayload
 from app.payload.application.ports.transformer import TransformerUnavailableError
 from app.payload.application.services.payload import PayloadService
 from app.payload.application.services.transformation import TransformationService
+from app.payload.application.value_objects.payload_input import PayloadInput
 from tests.doubles import (
     FakePayloadGateway,
     FakeRacingPayloadGateway,

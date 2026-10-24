@@ -1,6 +1,6 @@
 import pytest
 
-from app.payload.application.payload_input import PayloadInput, UnequalListsError
+from app.payload.application.value_objects.payload_input import PayloadInput, UnequalListsError
 
 
 def test_sample_renders_as_the_task_shows() -> None:

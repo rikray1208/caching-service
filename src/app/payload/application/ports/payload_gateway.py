@@ -28,7 +28,11 @@ class PayloadNotFoundError(BaseError):
 class PayloadGateway(ABC):
     @abstractmethod
     async def find_id(self, fingerprint: str) -> UUID | None:
-        """Return the id of the payload generated from the input with this fingerprint, or None if there is none."""
+        pass
+
+    @abstractmethod
+    async def find_output(self, payload_id: UUID) -> str | None:
+        pass
 
     @abstractmethod
     async def add(self, new_payload: NewPayload) -> StoredPayload:
@@ -36,7 +40,3 @@ class PayloadGateway(ABC):
         Store the payload unless its fingerprint already has one, and return the fingerprint's payload either way.
         This, not find_id, guarantees id reuse: a concurrent request with the same input may store it first.
         """
-
-    @abstractmethod
-    async def find_output(self, payload_id: UUID) -> str | None:
-        """Return the payload's output, or None if no payload has this id."""

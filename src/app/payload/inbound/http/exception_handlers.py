@@ -10,9 +10,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.common.exceptions import BaseError
-from app.payload.application.payload_input import UnequalListsError
 from app.payload.application.ports.payload_gateway import PayloadNotFoundError
 from app.payload.application.ports.transformer import TransformerUnavailableError
+from app.payload.application.value_objects.payload_input import UnequalListsError
 from app.payload.inbound.http.schemas import ErrorResponse
 
 logger = logging.getLogger(__name__)

@@ -1,6 +1,5 @@
 from uuid import UUID
 
-from app.payload.application.payload_input import PayloadInput
 from app.payload.application.ports.payload_gateway import (
     NewPayload,
     PayloadGateway,
@@ -8,6 +7,7 @@ from app.payload.application.ports.payload_gateway import (
     StoredPayload,
 )
 from app.payload.application.services.transformation import TransformationService
+from app.payload.application.value_objects.payload_input import PayloadInput
 
 
 class PayloadService:
@@ -17,7 +17,8 @@ class PayloadService:
 
     async def create(self, payload_input: PayloadInput) -> StoredPayload:
         fingerprint = payload_input.fingerprint()
-        if (payload_id := await self._payload_gateway.find_id(fingerprint)) is not None:
+        payload_id = await self._payload_gateway.find_id(fingerprint)
+        if payload_id is not None:
             return StoredPayload(id=payload_id, created=False)
 
         transformations = await self._transformation_service.transform_all(payload_input.texts())
