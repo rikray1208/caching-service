@@ -204,6 +204,8 @@ uv run ruff check .
 uv run mypy
 ```
 
+On GitHub, the workflow in `.github/workflows/ci.yml` runs these three checks and `scripts/start-test-infra.sh` on every push and pull request.
+
 ## Migrations
 
 Every schema change is an Alembic revision in `migrations/versions`. To autogenerate one, start the database, which Compose publishes on `127.0.0.1:5433` for this, and point Alembic at it:

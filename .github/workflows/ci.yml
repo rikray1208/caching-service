@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # setup-uv publishes no major tags since v8, only immutable releases.
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          version: "0.12.8"
+
+      - name: Install Python
+        run: uv python install
+
+      - name: Install the dependencies
+        run: uv sync --locked
+
+      - name: Check the formatting
+        run: uv run --locked ruff format --check .
+
+      - name: Lint
+        run: uv run --locked ruff check .
+
+      - name: Type-check
+        run: uv run --locked mypy
+
+      - name: Run every test in Docker
+        run: scripts/start-test-infra.sh
