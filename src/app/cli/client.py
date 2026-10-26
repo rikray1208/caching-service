@@ -23,7 +23,7 @@ class PayloadClient:
     """The service's HTTP API as two calls, so the rest of the CLI never sees status codes."""
 
     def __init__(self, http: httpx2.Client) -> None:
-        self._http = http  # its owner sets base_url to the service
+        self._http = http
 
     def create(self, body: Mapping[str, Any]) -> CreatedPayload:
         # Encoded here because json= refuses NaN and lone surrogates, which json.loads accepts:

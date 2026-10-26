@@ -22,7 +22,6 @@ _BODY_ENCODING: Final = "utf-8-sig"
 
 
 def main() -> None:
-    """The cache-cli entry point. Exit status: 0 done, 1 the service failed, 2 invalid arguments or input."""
     try:
         settings = parse_settings(sys.argv[1:])
     except ValidationError as error:
@@ -63,10 +62,6 @@ def _exit_invalid(*reasons: str) -> NoReturn:
 
 
 def read_request_body(settings: CliSettings, stdin: TextIO) -> dict[str, Any]:
-    """
-    The body from --json, the --input file, or stdin for "-". Raise ValueError unless it is a JSON object,
-    and OSError if the file can't be read.
-    """
     match settings.input_path:
         case "-":
             text = stdin.read()
@@ -81,15 +76,11 @@ def read_request_body(settings: CliSettings, stdin: TextIO) -> dict[str, Any]:
 def _open_output(path: StandardStream | Path) -> AbstractContextManager[TextIO]:
     if isinstance(path, Path):
         return path.open("w", encoding="utf-8")
-    return nullcontext(sys.stdout)  # not closed: stdout belongs to whoever runs the CLI
+    return nullcontext(sys.stdout)
 
 
 def run(body: Mapping[str, Any], repeat: int, client: PayloadClient, *, output: TextIO, progress: TextIO) -> int:
-    """
-    Send the body `repeat` times, one POST and one GET per round. Write {"id", "created", "output"} as a JSON line
-    per round to `output`, and the round's time to `progress`. Stop at the first ServiceError and return 1: the CLI
-    shows how the service behaves, so it doesn't retry.
-    """
+    """Stop at the first ServiceError: the CLI shows how the service behaves, so it doesn't retry."""
     for round_number in range(1, repeat + 1):
         started = time.perf_counter()
         try:

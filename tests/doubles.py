@@ -162,5 +162,4 @@ class FakePayloadApi:
 
 
 def payload_client_for(handler: Callable[[httpx2.Request], httpx2.Response]) -> PayloadClient:
-    """A PayloadClient whose requests the handler answers, at http://service.test."""
     return PayloadClient(httpx2.Client(transport=httpx2.MockTransport(handler), base_url="http://service.test"))

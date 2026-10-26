@@ -284,7 +284,7 @@ def test_read_request_body_reads_stdin_for_dash() -> None:
 def test_main_exits_1_when_the_service_is_unreachable(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    with socket.socket() as probe:  # a port that was free a moment ago, so nothing listens on it
+    with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
     monkeypatch.setattr(sys, "argv", ["cache-cli", "--host", f"http://127.0.0.1:{port}", "-j", "{}"])

@@ -124,10 +124,7 @@ class CliSettings(BaseSettings):
 
 
 def parse_settings(args: Sequence[str]) -> CliSettings:
-    """
-    Parse and sanitize the arguments, with -h for --host and --help alone for help.
-    Raise ValidationError for an invalid value; argparse exits with status 2 for an unknown flag.
-    """
+    """Raise ValidationError for an invalid value; argparse exits with status 2 for an unknown flag."""
     # pydantic-settings adds -h/--help only to the parser it builds itself, so a parser of our own frees -h for
     # --host. Like pydantic-settings' parser, it refuses abbreviations: --rep 3 would otherwise pass for --repeat 3,
     # until a new flag made it ambiguous.
